@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>La pregunta más importante</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#fff0f6; --fg:#3a1040; --muted:#7a4a80; --pink:#ff4f93; --pink-fg:#fff; --sun:#ffd23f; --sun-fg:#3a1040; --card:#ffffff;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#1e0a2b;--fg:#ffe9f4;--muted:#d9a8dc;--card:#2d1240;--pink:#ff6aa5;--pink-fg:#2a0a1d;}
+}
+:root[data-theme="dark"]{--bg:#1e0a2b;--fg:#ffe9f4;--muted:#d9a8dc;--card:#2d1240;--pink:#ff6aa5;--pink-fg:#2a0a1d;}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;align-items:center;justify-content:center;overflow:hidden}
+main{width:min(560px,92vw);text-align:center;padding:28px 22px}
+h1{font-size:clamp(2rem,8vw,3.4rem);line-height:1.05;font-weight:800;margin:0 0 10px;letter-spacing:-.02em}
+.sub{color:var(--muted);margin:0 0 30px;font-size:1.05rem}
+.opts{display:flex;flex-direction:column;gap:14px;align-items:stretch}
+.slot{min-height:58px}
+button{font:inherit;font-weight:800;font-size:1.15rem;border:0;border-radius:999px;padding:16px 26px;cursor:pointer;width:100%;touch-action:manipulation}
+button:focus-visible{outline:3px solid var(--fg);outline-offset:3px}
+.ok{background:var(--sun);color:var(--sun-fg);box-shadow:0 5px 0 rgba(58,16,64,.35)}
+.ok:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(58,16,64,.35)}
+.run{background:var(--pink);color:var(--pink-fg);box-shadow:0 5px 0 rgba(58,16,64,.3)}
+.run.free{position:fixed;width:auto;white-space:nowrap;z-index:5;transition:left .28s cubic-bezier(.3,1.5,.5,1),top .28s cubic-bezier(.3,1.5,.5,1)}
+#msg{min-height:3.2em;margin:26px 0 0;font-size:1.2rem;font-weight:500}
+#win{display:none}
+#win h2{font-size:clamp(1.8rem,7vw,2.6rem);margin:0 0 8px;font-weight:800}
+#win p{font-size:1.15rem;margin:0}
+.done #q{display:none}
+.done #win{display:block}
+.bit{position:fixed;top:-30px;font-size:1.6rem;pointer-events:none;animation:fall linear forwards;z-index:9}
+@keyframes fall{to{transform:translateY(110vh) rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.run.free{transition:none}.bit{display:none}}
+</style>
+</head>
+<body>
+<main>
+  <section id="q">
+    <h1>Mamá, pregunta seria: ¿a quién querés más?</h1>
+    <p class="sub">Elegí con el corazón. Y pensalo bien, que te estoy mirando.</p>
+    <div class="opts">
+      <div class="slot"><button class="run" data-k="chiara" type="button">Chiara</button></div>
+      <div class="slot"><button class="ok" id="matteo" type="button">Matteo</button></div>
+      <div class="slot"><button class="run" data-k="ambos" type="button">A los dos por igual</button></div>
+    </div>
+    <p id="msg" aria-live="polite"></p>
+  </section>
+  <section id="win" aria-live="polite">
+    <h2>Lo sabía. 😎</h2>
+    <p>Respuesta correcta. Esto queda grabado, no hay vuelta atrás.</p>
+  </section>
+</main>
+<script>
+(function(){
+  var lines={
+    chiara:["Uy, ¿qué hacés? Esa no, mamá 😏","Chiara salió, dejá el mensaje","Esa opción está en reparación 🔧","Te vi, eh. Mano afuera.","Tu dedo tiene mejor gusto que eso","Chiara no está disponible para esta votación"],
+    ambos:["¿Los dos por igual? Eso es de política, má 🙄","Opción de diplomática, no disponible","Casi, pero no 😜","Acá no se acepta la neutralidad","Eso lo dice toda madre, no te hagas","Error 404: igualdad no encontrada"]
+  };
+  var late=["Ya van varios intentos, insistís mucho 😂","Rendite, mamá. Hay una sola salida y es amarilla.","Cansada ya estás, ¿no? Apretá el amarillo."];
+  var msg=document.getElementById('msg'),matteo=document.getElementById('matteo'),tries=0,idx={chiara:0,ambos:0};
+  var btns=[].slice.call(document.querySelectorAll('.run'));
+
+  function overlap(a,b,p){return !(a.right+p<b.left||a.left-p>b.right||a.bottom+p<b.top||a.top-p>b.bottom);}
+
+  function dodge(btn){
+    var W=window.innerWidth,H=window.innerHeight,m=12;
+    btn.classList.add('free');
+    var w=btn.offsetWidth,h=btn.offsetHeight;
+    var avoid=[matteo.getBoundingClientRect()];
+    btns.forEach(function(o){if(o!==btn&&o.classList.contains('free'))avoid.push(o.getBoundingClientRect());});
+    var x,y,ok,n=0;
+    do{
+      x=m+Math.random()*Math.max(0,W-w-2*m);
+      y=m+Math.random()*Math.max(0,H-h-2*m);
+      var r={left:x,right:x+w,top:y,bottom:y+h};
+      ok=avoid.every(function(a){return !overlap(r,a,10);});
+      n++;
+    }while(!ok&&n<60);
+    btn.style.left=x+'px';btn.style.top=y+'px';
+  }
+
+  function react(btn){
+    var k=btn.dataset.k;
+    tries++;
+    dodge(btn);
+    msg.textContent=tries%7===0?late[(tries/7-1)%late.length|0]:lines[k][idx[k]++%lines[k].length];
+  }
+
+  btns.forEach(function(b){
+    // Se corre antes de que se pueda apretar: mouse, touch y teclado
+    ['pointerenter','pointerdown','touchstart','focus'].forEach(function(ev){
+      b.addEventListener(ev,function(e){if(e.cancelable&&ev!=='focus')e.preventDefault();react(b);},{passive:false});
+    });
+    b.addEventListener('click',function(e){e.preventDefault();react(b);});
+  });
+
+  window.addEventListener('resize',function(){
+    btns.forEach(function(b){
+      if(!b.classList.contains('free'))return;
+      var r=b.getBoundingClientRect();
+      if(r.right>window.innerWidth||r.bottom>window.innerHeight)dodge(b);
+    });
+  });
+
+  matteo.addEventListener('click',function(){
+    document.body.classList.add('done');
+    btns.forEach(function(b){b.style.display='none';});
+    var e=['🎉','💛','😏','✨','🏆'];
+    for(var i=0;i<28;i++){
+      var s=document.createElement('span');
+      s.className='bit';s.textContent=e[i%e.length];
+      s.style.left=Math.random()*100+'vw';
+      s.style.animationDuration=(2+Math.random()*2.5)+'s';
+      s.style.animationDelay=(Math.random()*1.2)+'s';
+      document.body.appendChild(s);
+    }
+  });
+})();
+</script>
+</body>
+</html>
